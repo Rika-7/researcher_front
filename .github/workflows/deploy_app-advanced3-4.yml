@@ -26,12 +26,14 @@ jobs:
         
       - name: Build Next.js app
         run: |
+          # Build the application
           npm run build
-          # Enable standalone output in next.config.js
-          if [ -d ".next/standalone" ]; then
-            echo "Standalone build detected"
-          else
-            echo "Warning: Standalone build not found. Check next.config.js configuration."
+          
+          # Verify standalone output
+          if [ ! -d ".next/standalone" ]; then
+            echo "Error: Standalone build not found"
+            echo "Checking next.config.ts configuration..."
+            cat next.config.ts
             exit 1
           fi
 
@@ -40,23 +42,44 @@ jobs:
           # Create deployment directory
           mkdir -p deploy
           
-          # Copy standalone build (contains server.js)
-          cp -r ./.next/standalone/. ./deploy
+          # Copy standalone directory content
+          cp -r .next/standalone/. deploy/
           
-          # Copy static files
-          mkdir -p ./deploy/.next/static
-          cp -r ./.next/static/. ./deploy/.next/static
+          # Ensure static files are copied correctly
+          mkdir -p deploy/.next/static
+          cp -r .next/static/. deploy/.next/static/
           
-          # Copy public folder if it exists
+          # Copy public directory if it exists
           if [ -d "public" ]; then
-            cp -r ./public ./deploy/public
+            cp -r public deploy/
           fi
           
-          # Create start script
-          echo "{ \"scripts\": { \"start\": \"node server.js\" } }" > ./deploy/package.json
+          # Create startup script
+          echo '#!/bin/sh
+          cd /home/site/wwwroot
+          NODE_ENV=production node server.js' > deploy/startup.sh
+          chmod +x deploy/startup.sh
           
-          # Copy next.config
-          cp next.config.ts ./deploy/
+          # Create minimal package.json
+          echo '{
+            "name": "nextjs-app",
+            "version": "1.0.0",
+            "private": true,
+            "scripts": {
+              "start": "node server.js"
+            },
+            "engines": {
+              "node": ">=20.0.0"
+            }
+          }' > deploy/package.json
+          
+          # Verify deployment package
+          echo "Verifying deployment package contents:"
+          ls -la deploy/
+          echo "Checking for server.js:"
+          ls -la deploy/server.js || echo "server.js not found!"
+          echo "Checking startup script:"
+          cat deploy/startup.sh
 
       - name: Zip artifact for deployment
         run: zip release.zip ./deploy -r
@@ -82,7 +105,10 @@ jobs:
           name: next-app
 
       - name: Unzip artifact
-        run: unzip release.zip
+        run: |
+          unzip release.zip
+          echo "Deployment package contents:"
+          ls -la deploy/
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
@@ -93,12 +119,12 @@ jobs:
           package: ./deploy
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_080F12FDFA2445D7A0B013FAA247171A }}
 
-      - name: Handle deployment conflict
+      - name: Handle deployment failure
         if: failure()
         run: |
-          echo "Deployment failed, waiting 30 seconds before retry..."
-          sleep 30
-
+          echo "Initial deployment failed, waiting 45 seconds..."
+          sleep 45
+          
       - name: Retry deployment
         if: failure()
         uses: azure/webapps-deploy@v3
