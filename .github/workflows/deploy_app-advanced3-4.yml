@@ -32,7 +32,9 @@ jobs:
           # Verify standalone output
           if [ ! -d ".next/standalone" ]; then
             echo "Error: Standalone build not found"
-            echo "Checking next.config.ts configuration..."
+            echo "Current directory contents:"
+            ls -la
+            echo "next.config.ts contents:"
             cat next.config.ts
             exit 1
           fi
@@ -57,7 +59,7 @@ jobs:
           # Create startup script
           echo '#!/bin/sh
           cd /home/site/wwwroot
-          NODE_ENV=production node server.js' > deploy/startup.sh
+          NODE_ENV=production exec node server.js' > deploy/startup.sh
           chmod +x deploy/startup.sh
           
           # Create minimal package.json
@@ -67,19 +69,14 @@ jobs:
             "private": true,
             "scripts": {
               "start": "node server.js"
-            },
-            "engines": {
-              "node": ">=20.0.0"
             }
           }' > deploy/package.json
           
           # Verify deployment package
-          echo "Verifying deployment package contents:"
+          echo "Deployment package contents:"
           ls -la deploy/
           echo "Checking for server.js:"
           ls -la deploy/server.js || echo "server.js not found!"
-          echo "Checking startup script:"
-          cat deploy/startup.sh
 
       - name: Zip artifact for deployment
         run: zip release.zip ./deploy -r
@@ -112,21 +109,6 @@ jobs:
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'app-advanced3-4'
-          slot-name: 'Production'
-          package: ./deploy
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_080F12FDFA2445D7A0B013FAA247171A }}
-
-      - name: Handle deployment failure
-        if: failure()
-        run: |
-          echo "Initial deployment failed, waiting 45 seconds..."
-          sleep 45
-          
-      - name: Retry deployment
-        if: failure()
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'app-advanced3-4'
