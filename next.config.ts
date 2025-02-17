@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  output: "standalone",
-};
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'standalone',
+  experimental: {
+    // This is needed for Azure deployment
+    outputFileTracingRoot: undefined,
+  },
+}
 
 export default nextConfig;
